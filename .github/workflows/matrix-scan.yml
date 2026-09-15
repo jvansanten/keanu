@@ -105,6 +105,7 @@ jobs:
   aggregate_results:
     name: Aggregate Results
     needs: scan
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
