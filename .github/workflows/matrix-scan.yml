@@ -42,7 +42,7 @@ jobs:
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           echo '{' > "$RESULT_FILE"
           echo "  \"run\": $RUN_NUM," >> "$RESULT_FILE"
-          echo "  \"timestamp\": \"${TIMESTAMP}\"" >> "$RESULT_FILE"
+          echo "  \"timestamp\": \"${TIMESTAMP}\",
 
       - name: Check target endpoint availability (pre-scan)
         id: pre_check
