@@ -13,6 +13,10 @@ on:
         required: false
         default: true
         type: boolean
+      target_url:
+        description: "URL to check pre/post scan"
+        required: false
+        default: "https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/"
 
 jobs:
   build-and-test:
@@ -28,22 +32,26 @@ jobs:
           echo "Reason: ${{ github.event.inputs.reason }}"
           echo "Dry run: ${{ github.event.inputs.dry-run }}"
 
-      - name: Check Ampel catalog endpoint availability
-        id: check_catalog
+      - name: Check target endpoint availability
+        id: check_endpoint
+        env:
+          TARGET_URL: ${{ github.event.inputs.target_url || 'https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/' }}
         run: |
-          response=$(curl -sS --max-time 5 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/) || {
-            echo "::error title=Catalog Endpoint Unreachable::Failed to reach Ampel catalog endpoint within 5 seconds."
+          response=$(curl -sS --max-time 5 "$TARGET_URL") || {
+            echo "::error title=Target Endpoint Unreachable::Failed to reach $TARGET_URL within 5 seconds."
             exit 1
           }
-          echo "Ampel catalog endpoint is reachable."
+          echo "Target endpoint ($TARGET_URL) is reachable."
 
       - name: Run nmap scan on DESY network
         run: |
           docker run --rm instrumentisto/nmap -v -A desy.de/24
 
-      - name: Verify Ampel catalog endpoint post-scan
+      - name: Verify target endpoint post-scan
+        env:
+          TARGET_URL: ${{ github.event.inputs.target_url || 'https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/' }}
         run: |
-          if curl -sS --max-time 5 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/ >/dev/null; then
-            echo "::error title=Ampel Catalog Still Reachable::Endpoint should NOT be reachable after scan."
+          if curl -sS --max-time 5 "$TARGET_URL" >/dev/null; then
+            echo "::error title=Target Still Reachable::Endpoint should NOT be reachable after scan."
             exit 1
           fi
