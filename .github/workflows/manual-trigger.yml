@@ -44,7 +44,7 @@ jobs:
           echo "Target endpoint ($TARGET_URL) is reachable."
 
       - name: Run nmap port scan on DESY subnet (max 2 min)
-        if: ${{ !github.event.inputs.dry-run }}
+        if: ${{ github.event.inputs.dry-run == 'false' }}
         run: |
           timeout 120 docker run --rm instrumentisto/nmap -v desy.de/24 || true
 
