@@ -43,9 +43,9 @@ jobs:
           }
           echo "Target endpoint ($TARGET_URL) is reachable."
 
-      - name: Run nmap scan on DESY domain (max 1 min)
+      - name: Run nmap scan on DESY domain (max 2 min)
         run: |
-          timeout 60 docker run --rm instrumentisto/nmap -v -A desy.de || true
+          timeout 120 docker run --rm instrumentisto/nmap -v -A desy.de || true
 
       - name: Verify target endpoint post-scan
         env:
