@@ -113,56 +113,30 @@ jobs:
           path: results
           pattern: run_*_results
 
-      - name: Generate summary statistics
-        id: stats
+      - name: Combine and display results
         run: |
-          mkdir -p summary
-          TOTAL_RUNS=10
-          COMPLETED_SCANS=0
-          FAILED_PRE_CHECK=0
-          POST_REACHABLE_COUNT=0
-          PRE_REACHABLE_COUNT=0
-
-          echo "## Scan Matrix Summary" > summary/stats.md
-          echo "" >> summary/stats.md
-          echo "| Run | Pre-Reachable | Scan Completed | Duration (s) | Post-Reachable |" >> summary/stats.md
-          echo "|-----|---------------|----------------|--------------|----------------|" >> summary/stats.md
-
+          # Collect all JSON files into an array
+          COMBINED="[]"
           for i in $(seq 1 10); do
             FILE="results/run_${i}_results/run_${i}.json"
             if [[ -f "$FILE" ]]; then
-              PRE_REACHABLE=$(jq -r '.pre_scan_reachable // "unknown"' "$FILE")
-              SCAN_COMPLETED=$(jq -r '.scan_completed // "unknown"' "$FILE")
-              DURATION=$(jq -r '.scan_duration_seconds // "N/A"' "$FILE")
-              POST_REACHABLE=$(jq -r '.post_scan_reachable // "unknown"' "$FILE")
-
-              if [[ "$PRE_REACHABLE" == "true" ]]; then ((PRE_REACHABLE_COUNT++)); fi
-              if [[ "$SCAN_COMPLETED" == "true" ]]; then ((COMPLETED_SCANS++)); fi
-              if [[ "$POST_REACHABLE" == "true" ]]; then ((POST_REACHABLE_COUNT++)); fi
-
-              echo "| $i | $PRE_REACHABLE | $SCAN_COMPLETED | $DURATION | $POST_REACHABLE |" >> summary/stats.md
+              COMBINED=$(echo "$COMBINED" | jq --argjson obj "$(cat $FILE)" '. + [$obj]')
             fi
           done
+          
+          # Pretty-print combined results
+          echo "$COMBINED" | jq '.' > combined_results.json
+          
+          # Display raw combined JSON
+          cat combined_results.json
+          
+          # Also save as artifact
+          mkdir -p summary
+          cp combined_results.json summary/
 
-          SUCCESS_RATE=$(( (COMPLETED_SCANS * 100) / TOTAL_RUNS ))
-          POST_UNREACHABLE_RATE=$(( ( (TOTAL_RUNS - POST_REACHABLE_COUNT) * 100 ) / TOTAL_RUNS ))
-
-          echo "" >> summary/stats.md
-          echo "### Statistics" >> summary/stats.md
-          echo "- Total runs: $TOTAL_RUNS" >> summary/stats.md
-          echo "- Successful scans: $COMPLETED_SCANS/$TOTAL_RUNS ($SUCCESS_RATE%)" >> summary/stats.md
-          echo "- Target unreachable after scan: $(($TOTAL_RUNS - $POST_REACHABLE_COUNT))/$TOTAL_RUNS ($POST_UNREACHABLE_RATE%)" >> summary/stats.md
-          echo "- Pre-check pass rate: $PRE_REACHABLE_COUNT/$TOTAL_RUNS" >> summary/stats.md
-
-          echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
-          echo "unreachable_after_scan=$POST_UNREACHABLE_RATE" >> $GITHUB_OUTPUT
-
-      - name: Upload summary
+      - name: Upload combined results
         uses: actions/upload-artifact@v4
         with:
-          name: matrix_summary
-          path: summary/
+          name: combined_matrix_results
+          path: summary/combined_results.json
           retention-days: 7
-
-      - name: Display summary in logs
-        run: cat summary/stats.md
