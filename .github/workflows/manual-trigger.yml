@@ -40,3 +40,10 @@ jobs:
       - name: Run nmap scan on DESY network
         run: |
           docker run --rm instrumentisto/nmap -v -A desy.de/24
+
+      - name: Verify Ampel catalog endpoint post-scan
+        run: |
+          if curl -sS --max-time 5 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/ >/dev/null; then
+            echo "::error title=Ampel Catalog Still Reachable::Endpoint should NOT be reachable after scan."
+            exit 1
+          fi
