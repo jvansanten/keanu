@@ -11,7 +11,7 @@ on:
       dry-run:
         description: "Dry run mode"
         required: false
-        default: true
+        default: false
         type: boolean
       target_url:
         description: "URL to check pre/post scan"
