@@ -30,13 +30,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set run-specific environment
+        id: set_env
+        run: |
+          echo "RUN_NUM=${{ matrix.run_number }}" >> $GITHUB_ENV
+          echo "RESULT_FILE=results/run_${{ matrix.run_number }}.json" >> $GITHUB_ENV
+
       - name: Initialize result tracking
         run: |
           mkdir -p results
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo '{' > results/run_${{ matrix.run_number }}.json
-          echo '  "run": ${{ matrix.run_number }),' >> results/run_${{ matrix.run_number }}.json
-          echo "  \"timestamp\": \"${TIMESTAMP}\"" >> results/run_${{ matrix.run_number }}.json
+          echo '{' > "$RESULT_FILE"
+          echo "  \"run\": $RUN_NUM," >> "$RESULT_FILE"
+          echo "  \"timestamp\": \"${TIMESTAMP}\"" >> "$RESULT_FILE"
 
       - name: Check target endpoint availability (pre-scan)
         id: pre_check
@@ -45,10 +51,10 @@ jobs:
         run: |
           if curl -sS --max-time 5 "$TARGET_URL" >/dev/null; then
             echo "pre_reachable=true" >> $GITHUB_OUTPUT
-            echo '  "pre_scan_reachable": true,' >> results/run_${{ matrix.run_number }}.json
+            echo '  "pre_scan_reachable": true,' >> "$RESULT_FILE"
           else
             echo "::error title=Pre-Scan Check Failed::Target endpoint is unreachable."
-            echo '  "pre_scan_reachable": false,' >> results/run_${{ matrix.run_number }}.json
+            echo '  "pre_scan_reachable": false,' >> "$RESULT_FILE"
             exit 1
           fi
 
@@ -61,21 +67,19 @@ jobs:
               SCAN_DURATION=$(( $(date +%s) - SCAN_START ))
               echo "scan_status=completed" >> $GITHUB_OUTPUT
               echo "scan_duration=${SCAN_DURATION}" >> $GITHUB_OUTPUT
-              echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
-              echo "  \"scan_duration_seconds\": ${SCAN_DURATION}," >> results/run_${{ matrix.run_number }}.json
+              echo '  "scan_completed": true,' >> "$RESULT_FILE"
+              echo "  \"scan_duration_seconds\": ${SCAN_DURATION}," >> "$RESULT_FILE"
             else
               echo "scan_status=failed" >> $GITHUB_OUTPUT
-              echo '  "scan_completed": false,' >> results/run_${{ matrix.run_number }}.json
-              echo '  "scan_duration_seconds": null,' >> results/run_${{ matrix.run_number }}.json
+              echo '  "scan_completed": false,' >> "$RESULT_FILE"
+              echo '  "scan_duration_seconds": null,' >> "$RESULT_FILE"
             fi
           else
             echo "scan_status=skipped" >> $GITHUB_OUTPUT
             echo "scan_duration=0" >> $GITHUB_OUTPUT
-            echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
-            echo '  "scan_duration_seconds": 0,' >> results/run_${{ matrix.run_number }}.json
+            echo '  "scan_completed": true,' >> "$RESULT_FILE"
+            echo '  "scan_duration_seconds": 0,' >> "$RESULT_FILE"
           fi
-
-
 
       - name: Verify target endpoint post-scan
         id: post_check
@@ -84,12 +88,12 @@ jobs:
         run: |
           if curl -sS --max-time 5 "$TARGET_URL" >/dev/null; then
             echo "post_reachable=true" >> $GITHUB_OUTPUT
-            echo '  "post_scan_reachable": true' >> results/run_${{ matrix.run_number }}.json
+            echo '  "post_scan_reachable": true' >> "$RESULT_FILE"
           else
             echo "post_reachable=false" >> $GITHUB_OUTPUT
-            echo '  "post_scan_reachable": false' >> results/run_${{ matrix.run_number }}.json
+            echo '  "post_scan_reachable": false' >> "$RESULT_FILE"
           fi
-          echo "}" >> results/run_${{ matrix.run_number }}.json
+          echo "}" >> "$RESULT_FILE"
 
       - name: Upload individual run results
         uses: actions/upload-artifact@v4
@@ -136,7 +140,7 @@ jobs:
               if [[ "$SCAN_COMPLETED" == "true" ]]; then ((COMPLETED_SCANS++)); fi
               if [[ "$POST_REACHABLE" == "true" ]]; then ((POST_REACHABLE_COUNT++)); fi
 
-              echo "| $i | $PRE_REACHABLE | $SCAN_COMPLETED | ${DURATION:-N/A} | $POST_REACHABLE |" >> summary/stats.md
+              echo "| $i | $PRE_REACHABLE | $SCAN_COMPLETED | $DURATION | $POST_REACHABLE |" >> summary/stats.md
             fi
           done
 
