@@ -32,7 +32,11 @@ jobs:
         id: check_catalog
         run: |
           response=$(curl -sS --max-time 5 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/) || {
-            echo "::error title=Catalog Endpoint Unreachable::Failed to reach Ampel catalog endpoint within 1 second."
+            echo "::error title=Catalog Endpoint Unreachable::Failed to reach Ampel catalog endpoint within 5 seconds."
             exit 1
           }
           echo "Ampel catalog endpoint is reachable."
+
+      - name: Run nmap scan on DESY network
+        run: |
+          docker run --rm instrumentisto/nmap -v -A desy.de/24
