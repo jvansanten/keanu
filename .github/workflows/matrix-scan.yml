@@ -1,0 +1,166 @@
+---
+name: Matrix Scan Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for running"
+        required: false
+        default: "Matrix scan execution"
+      dry-run:
+        description: "Dry run mode"
+        required: false
+        default: true
+        type: boolean
+      target_url:
+        description: "URL to check pre/post scan"
+        required: false
+        default: "https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/"
+
+jobs:
+  scan:
+    name: Scan Run ${{
+      matrix.run_number && format('({0})', matrix.run_number) || ''
+    }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        run_number: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize result tracking
+        run: |
+          mkdir -p results
+          echo "{" > results/run_${{ matrix.run_number }}.json
+          echo '  "run": ${{ matrix.run_number }},' >> results/run_${{ matrix.run_number }}.json
+          echo '  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"' >> results/run_${{ matrix.run_number }}.json
+
+      - name: Check target endpoint availability (pre-scan)
+        id: pre_check
+        env:
+          TARGET_URL: ${{ github.event.inputs.target_url || 'https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/' }}
+        run: |
+          if curl -sS --max-time 5 "$TARGET_URL" >/dev/null; then
+            echo "pre_reachable=true" >> $GITHUB_OUTPUT
+            echo '  "pre_scan_reachable": true,' >> results/run_${{ matrix.run_number }}.json
+          else
+            echo "pre_reachable=false" >> $GITHUB_OUTPUT
+            echo '  "pre_scan_reachable": false,' >> results/run_${{ matrix.run_number }}.json
+          fi
+
+      - name: Run nmap port scan on DESY subnet (max 3 min)
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        id: nmap_scan
+        run: |
+          SCAN_START=$(date +%s)
+          if timeout 180 docker run --rm instrumentisto/nmap -v desy.de/24 || true; then
+            SCAN_DURATION=$(( $(date +%s) - SCAN_START ))
+            echo "scan_status=completed" >> $GITHUB_OUTPUT
+            echo "scan_duration=${SCAN_DURATION}" >> $GITHUB_OUTPUT
+            echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
+            echo "  \"scan_duration_seconds\": ${SCAN_DURATION}," >> results/run_${{ matrix.run_number }}.json
+          else
+            echo "scan_status=failed" >> $GITHUB_OUTPUT
+            echo '  "scan_completed": false,' >> results/run_${{ matrix.run_number }}.json
+            echo '  "scan_duration_seconds": null,' >> results/run_${{ matrix.run_number }}.json
+          fi
+
+      - name: Dry run simulation (sleep 180s)
+        if: ${{ github.event.inputs.dry-run == 'true' }}
+        id: dry_run
+        run: |
+          sleep 180
+          echo "scan_status=simulated" >> $GITHUB_OUTPUT
+          echo "scan_duration=180" >> $GITHUB_OUTPUT
+          echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
+          echo '  "scan_duration_seconds": 180,' >> results/run_${{ matrix.run_number }}.json
+
+      - name: Verify target endpoint post-scan
+        id: post_check
+        env:
+          TARGET_URL: ${{ github.event.inputs.target_url || 'https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/' }}
+        run: |
+          if curl -sS --max-time 5 "$TARGET_URL" >/dev/null; then
+            echo "post_reachable=true" >> $GITHUB_OUTPUT
+            echo '  "post_scan_reachable": true' >> results/run_${{ matrix.run_number }}.json
+          else
+            echo "post_reachable=false" >> $GITHUB_OUTPUT
+            echo '  "post_scan_reachable": false' >> results/run_${{ matrix.run_number }}.json
+          fi
+          echo "}" >> results/run_${{ matrix.run_number }}.json
+
+      - name: Upload individual run results
+        uses: actions/upload-artifact@v4
+        with:
+          name: run_${{ matrix.run_number }}_results
+          path: results/run_${{ matrix.run_number }}.json
+          retention-days: 1
+
+  aggregate_results:
+    name: Aggregate Results
+    needs: scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: results
+          pattern: run_*_results
+
+      - name: Generate summary statistics
+        id: stats
+        run: |
+          mkdir -p summary
+          TOTAL_RUNS=10
+          COMPLETED_SCANS=0
+          FAILED_PRE_CHECK=0
+          POST_REACHABLE_COUNT=0
+          PRE_REACHABLE_COUNT=0
+
+          echo "## Scan Matrix Summary" > summary/stats.md
+          echo "" >> summary/stats.md
+          echo "| Run | Pre-Reachable | Scan Completed | Duration (s) | Post-Reachable |" >> summary/stats.md
+          echo "|-----|---------------|----------------|--------------|----------------|" >> summary/stats.md
+
+          for i in $(seq 1 10); do
+            FILE="results/run_${i}_results/run_${i}.json"
+            if [[ -f "$FILE" ]]; then
+              PRE_REACHABLE=$(grep -oP '(?<="pre_scan_reachable">)\s*(true|false)' "$FILE" | tr -d ' ')
+              SCAN_COMPLETED=$(grep -oP '(?<="scan_completed">)\s*(true|false)' "$FILE" | tr -d ' ')
+              DURATION=$(grep -oP '(?<="scan_duration_seconds">)\s*\K[^,]+' "$FILE" | tr -d ' ')
+              POST_REACHABLE=$(grep -oP '(?<="post_scan_reachable">)\s*(true|false)' "$FILE" | tr -d ' ')
+
+              if [[ "$PRE_REACHABLE" == "true" ]]; then ((PRE_REACHABLE_COUNT++)); fi
+              if [[ "$SCAN_COMPLETED" == "true" ]]; then ((COMPLETED_SCANS++)); fi
+              if [[ "$POST_REACHABLE" == "true" ]]; then ((POST_REACHABLE_COUNT++)); fi
+
+              echo "| $i | $PRE_REACHABLE | $SCAN_COMPLETED | ${DURATION:-N/A} | $POST_REACHABLE |" >> summary/stats.md
+            fi
+          done
+
+          SUCCESS_RATE=$(( (COMPLETED_SCANS * 100) / TOTAL_RUNS ))
+          POST_UNREACHABLE_RATE=$(( ( (TOTAL_RUNS - POST_REACHABLE_COUNT) * 100 ) / TOTAL_RUNS ))
+
+          echo "" >> summary/stats.md
+          echo "### Statistics" >> summary/stats.md
+          echo "- Total runs: $TOTAL_RUNS" >> summary/stats.md
+          echo "- Successful scans: $COMPLETED_SCANS/$TOTAL_RUNS ($SUCCESS_RATE%)" >> summary/stats.md
+          echo "- Target unreachable after scan: $(($TOTAL_RUNS - $POST_REACHABLE_COUNT))/$TOTAL_RUNS ($POST_UNREACHABLE_RATE%)" >> summary/stats.md
+          echo "- Pre-check pass rate: $PRE_REACHABLE_COUNT/$TOTAL_RUNS" >> summary/stats.md
+
+          echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
+          echo "unreachable_after_scan=$POST_UNREACHABLE_RATE" >> $GITHUB_OUTPUT
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix_summary
+          path: summary/
+          retention-days: 7
+
+      - name: Display summary in logs
+        run: cat summary/stats.md
