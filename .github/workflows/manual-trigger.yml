@@ -45,7 +45,7 @@ jobs:
 
       - name: Run nmap scan on DESY domain (max 1 min)
         run: |
-          timeout 60 docker run --rm instrumentisto/nmap -v -A desy.de
+          timeout 60 docker run --rm instrumentisto/nmap -v -A desy.de || true
 
       - name: Verify target endpoint post-scan
         env:
