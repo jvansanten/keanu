@@ -46,8 +46,9 @@ jobs:
             echo "pre_reachable=true" >> $GITHUB_OUTPUT
             echo '  "pre_scan_reachable": true,' >> results/run_${{ matrix.run_number }}.json
           else
-            echo "pre_reachable=false" >> $GITHUB_OUTPUT
+            echo "::error title=Pre-Scan Check Failed::Target endpoint is unreachable."
             echo '  "pre_scan_reachable": false,' >> results/run_${{ matrix.run_number }}.json
+            exit 1
           fi
 
       - name: Run nmap port scan on DESY subnet (max 3 min)
