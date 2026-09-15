@@ -1,0 +1,38 @@
+---
+name: Manual Trigger Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for running"
+        required: false
+        default: "Manual execution"
+      dry-run:
+        description: "Dry run mode" 
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Echo trigger info
+        run: |
+          echo "Triggered manually!"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Dry run: ${{ github.event.inputs.dry-run }}"
+
+      - name: Check Ampel catalog endpoint availability
+        id: check_catalog
+        run: |
+          response=$(curl -sS --max-time 1 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/) || {
+            echo "::error title=Catalog Endpoint Unreachable::Failed to reach Ampel catalog endpoint within 1 second."
+            exit 1
+          }
+          echo "Ampel catalog endpoint is reachable."
