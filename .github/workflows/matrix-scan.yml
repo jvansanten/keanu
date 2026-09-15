@@ -51,32 +51,30 @@ jobs:
             exit 1
           fi
 
-      - name: Run nmap port scan on DESY subnet (max 3 min)
-        if: ${{ github.event.inputs.dry-run == 'false' }}
-        id: nmap_scan
+      - name: Handle scan (real or skipped)
+        id: scan_step
         run: |
-          SCAN_START=$(date +%s)
-          if timeout 180 docker run --rm instrumentisto/nmap -v desy.de/24 || true; then
-            SCAN_DURATION=$(( $(date +%s) - SCAN_START ))
-            echo "scan_status=completed" >> $GITHUB_OUTPUT
-            echo "scan_duration=${SCAN_DURATION}" >> $GITHUB_OUTPUT
-            echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
-            echo "  \"scan_duration_seconds\": ${SCAN_DURATION}," >> results/run_${{ matrix.run_number }}.json
+          if [[ "${{ github.event.inputs.dry-run }}" == "false" ]]; then
+            SCAN_START=$(date +%s)
+            if timeout 180 docker run --rm instrumentisto/nmap -v desy.de/24 || true; then
+              SCAN_DURATION=$(( $(date +%s) - SCAN_START ))
+              echo "scan_status=completed" >> $GITHUB_OUTPUT
+              echo "scan_duration=${SCAN_DURATION}" >> $GITHUB_OUTPUT
+              echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
+              echo "  \"scan_duration_seconds\": ${SCAN_DURATION}," >> results/run_${{ matrix.run_number }}.json
+            else
+              echo "scan_status=failed" >> $GITHUB_OUTPUT
+              echo '  "scan_completed": false,' >> results/run_${{ matrix.run_number }}.json
+              echo '  "scan_duration_seconds": null,' >> results/run_${{ matrix.run_number }}.json
+            fi
           else
-            echo "scan_status=failed" >> $GITHUB_OUTPUT
-            echo '  "scan_completed": false,' >> results/run_${{ matrix.run_number }}.json
-            echo '  "scan_duration_seconds": null,' >> results/run_${{ matrix.run_number }}.json
+            echo "scan_status=skipped" >> $GITHUB_OUTPUT
+            echo "scan_duration=0" >> $GITHUB_OUTPUT
+            echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
+            echo '  "scan_duration_seconds": 0,' >> results/run_${{ matrix.run_number }}.json
           fi
 
-      - name: Dry run simulation (sleep 180s)
-        if: ${{ github.event.inputs.dry-run == 'true' }}
-        id: dry_run
-        run: |
-          sleep 180
-          echo "scan_status=simulated" >> $GITHUB_OUTPUT
-          echo "scan_duration=180" >> $GITHUB_OUTPUT
-          echo '  "scan_completed": true,' >> results/run_${{ matrix.run_number }}.json
-          echo '  "scan_duration_seconds": 180,' >> results/run_${{ matrix.run_number }}.json
+
 
       - name: Verify target endpoint post-scan
         id: post_check
