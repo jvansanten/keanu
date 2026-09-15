@@ -20,9 +20,7 @@ on:
 
 jobs:
   scan:
-    name: Scan Run ${{
-      matrix.run_number && format('({0})', matrix.run_number) || ''
-    }}
+    name: Scan Run ${{ matrix.run_number }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
