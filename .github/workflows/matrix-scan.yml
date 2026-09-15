@@ -33,9 +33,10 @@ jobs:
       - name: Initialize result tracking
         run: |
           mkdir -p results
-          echo "{" > results/run_${{ matrix.run_number }}.json
-          echo '  "run": ${{ matrix.run_number }},' >> results/run_${{ matrix.run_number }}.json
-          echo '  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"' >> results/run_${{ matrix.run_number }}.json
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo '{' > results/run_${{ matrix.run_number }}.json
+          echo '  "run": ${{ matrix.run_number }),' >> results/run_${{ matrix.run_number }}.json
+          echo "  \"timestamp\": \"${TIMESTAMP}\"" >> results/run_${{ matrix.run_number }}.json
 
       - name: Check target endpoint availability (pre-scan)
         id: pre_check
@@ -126,10 +127,10 @@ jobs:
           for i in $(seq 1 10); do
             FILE="results/run_${i}_results/run_${i}.json"
             if [[ -f "$FILE" ]]; then
-              PRE_REACHABLE=$(grep -oP '(?<="pre_scan_reachable">)\s*(true|false)' "$FILE" | tr -d ' ')
-              SCAN_COMPLETED=$(grep -oP '(?<="scan_completed">)\s*(true|false)' "$FILE" | tr -d ' ')
-              DURATION=$(grep -oP '(?<="scan_duration_seconds">)\s*\K[^,]+' "$FILE" | tr -d ' ')
-              POST_REACHABLE=$(grep -oP '(?<="post_scan_reachable">)\s*(true|false)' "$FILE" | tr -d ' ')
+              PRE_REACHABLE=$(jq -r '.pre_scan_reachable // "unknown"' "$FILE")
+              SCAN_COMPLETED=$(jq -r '.scan_completed // "unknown"' "$FILE")
+              DURATION=$(jq -r '.scan_duration_seconds // "N/A"' "$FILE")
+              POST_REACHABLE=$(jq -r '.post_scan_reachable // "unknown"' "$FILE")
 
               if [[ "$PRE_REACHABLE" == "true" ]]; then ((PRE_REACHABLE_COUNT++)); fi
               if [[ "$SCAN_COMPLETED" == "true" ]]; then ((COMPLETED_SCANS++)); fi
