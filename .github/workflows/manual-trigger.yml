@@ -31,7 +31,7 @@ jobs:
       - name: Check Ampel catalog endpoint availability
         id: check_catalog
         run: |
-          response=$(curl -sS --max-time 1 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/) || {
+          response=$(curl -sS --max-time 5 https://ampel-ztf.zeuthen.desy.de/api/catalogmatch/catalogs/) || {
             echo "::error title=Catalog Endpoint Unreachable::Failed to reach Ampel catalog endpoint within 1 second."
             exit 1
           }
