@@ -47,7 +47,7 @@ jobs:
       - name: Check IT Access IP status
         id: ip_check
         run: |
-          IP_RESULT=$(curl -sS --max-time 5 https://it-access.desy.de/api/ip/check)
+          IP_RESULT=$(curl -sS --max-time 5 https://v4.it-access.desy.de/api/ip/check)
           echo "IP Check Result: $IP_RESULT"
           jq --argjson ip_data "$IP_RESULT" '. += {it_access_ip_check: $ip_data}' "$RESULT_FILE" > tmp.json && mv tmp.json "$RESULT_FILE"
 
@@ -92,7 +92,7 @@ jobs:
       - name: Check IT Access IP status (post-scan)
         id: ip_check_post
         run: |
-          IP_RESULT=$(curl -sS --max-time 5 https://it-access.desy.de/api/ip/check)
+          IP_RESULT=$(curl -sS --max-time 5 https://v4.it-access.desy.de/api/ip/check)
           echo "Post-Scan IP Check Result: $IP_RESULT"
           jq --argjson ip_data "$IP_RESULT" '. += {it_access_ip_check_post: $ip_data}' "$RESULT_FILE" > tmp.json && mv tmp.json "$RESULT_FILE"
 
