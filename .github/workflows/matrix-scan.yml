@@ -44,6 +44,13 @@ jobs:
             --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{run: ($run | tonumber), timestamp: $ts}' > "$RESULT_FILE"
 
+      - name: Check IT Access IP status
+        id: ip_check
+        run: |
+          IP_RESULT=$(curl -sS --max-time 5 https://it-access.desy.de/api/ip/check)
+          echo "IP Check Result: $IP_RESULT"
+          jq --argjson ip_data "$IP_RESULT" '. += {it_access_ip_check: $ip_data}' "$RESULT_FILE" > tmp.json && mv tmp.json "$RESULT_FILE"
+
       - name: Check target endpoint availability (pre-scan)
         id: pre_check
         env:
@@ -81,6 +88,13 @@ jobs:
             jq --arg val true '. += {scan_completed: $val, scan_duration_seconds: 0}' \
               "$RESULT_FILE" > tmp.json && mv tmp.json "$RESULT_FILE"
           fi
+
+      - name: Check IT Access IP status (post-scan)
+        id: ip_check_post
+        run: |
+          IP_RESULT=$(curl -sS --max-time 5 https://it-access.desy.de/api/ip/check)
+          echo "Post-Scan IP Check Result: $IP_RESULT"
+          jq --argjson ip_data "$IP_RESULT" '. += {it_access_ip_check_post: $ip_data}' "$RESULT_FILE" > tmp.json && mv tmp.json "$RESULT_FILE"
 
       - name: Verify target endpoint post-scan
         id: post_check
